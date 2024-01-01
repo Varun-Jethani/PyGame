@@ -52,11 +52,11 @@ def load_sprite_sheets(dir1,dir2,width,height,direction=False):
 
     return all_sprites
             
-def get_block(size):
+def get_block(size,pos):
     path = join("assets","Terrain","Terrain.png")
     image = pygame.image.load(path).convert_alpha()
     surface = pygame.Surface((size,size),pygame.SRCALPHA,32)
-    rect = pygame.Rect(96,64,size,size)
+    rect = pygame.Rect(pos[0],pos[1],size,size)
     surface.blit(image,(0,0),rect)
     return pygame.transform.scale2x(surface)
 
@@ -70,7 +70,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self.rect = pygame.Rect(x,y,width,height)
         self.x_vel = 0
-        self.y_vel = 0
+        self.y_vel = -8
         self.mask = None
         self.direction = "left"
         self.animation_count = 0
@@ -80,6 +80,8 @@ class Player(pygame.sprite.Sprite):
         self.hit_count=0
         self.health = 100
         self.health_counter=0
+        self.spawned = 12
+        
 
 
     def jump(self):
@@ -213,10 +215,12 @@ class HealthBar(Bar):
 
 
 class Block(Object):
-    def __init__(self, x, y, size):
+    def __init__(self, x, y, size,type):
         super().__init__(x, y, size, size)
-        block = get_block(size)
-        self.image.blit(block,(0,0))
+        blocks_loc = [(0,0),(0,64),(0,128),(96,0),(96,64),(96,128),(192,0),(192,64),(192,128),(288,64),(288,128)]
+        blocks = [get_block(size,loc) for loc in blocks_loc]
+        
+        self.image.blit(blocks[type],(0,0))
         self.mask = pygame.mask.from_surface(self.image)
 
 class Fire (Object):
@@ -308,11 +312,11 @@ def draw (window, background, bg_image, player,objects,bars,gameEnd,offset_x):
     for tile in background:
         window.blit(bg_image, tile)
 
+    player.draw(window, offset_x)
     for obj in objects:
         obj.draw(window, offset_x)
 
     
-    player.draw(window, offset_x)
 
     for bar in bars:
         bar.draw(window,player.health)
@@ -327,7 +331,9 @@ def handle_vertical_collision(player, objects, dy):
     collided_objects = []
     for obj in objects:
         if pygame.sprite.collide_mask(player,obj):
-            if dy >= 0:
+            if player.spawned > 0:
+                    player.spawned -= 1
+            elif dy >= 0:
                 collision_point = pygame.sprite.collide_mask(player, obj)
                 print(collision_point)
                 print(player.rect.height)
@@ -340,11 +346,11 @@ def handle_vertical_collision(player, objects, dy):
                         player.rect.left -= 2
                     else:
                         player.rect.left += 2
-                player.rect.bottom = obj.rect.top
-                player.landed()        
+                    player.rect.bottom = obj.rect.top
+                    player.landed()        
                         
 
-            if dy <= 0:
+            elif dy <= 0:
                 player.rect.top = obj.rect.bottom
                 player.hit_header()
         
@@ -389,19 +395,19 @@ def main(window):
     background, bg_image = get_background("Blue.png")
 
     block_size = 96
-
-    player = Player(100,100,50,50)
+    
+    player = Player(10,HEIGHT - block_size * 2 + 25 ,50,50)
     fire=Fire(100,HEIGHT - block_size - 64, 16, 32)
     fire.on()
     saws = [Saw(200, HEIGHT - block_size -74,38,38),Saw(400, HEIGHT - block_size -74,38,38),Saw(800, HEIGHT - block_size -74,38,38),Saw(1200, HEIGHT - block_size -74,38,38)]
     for saw in saws:
         saw.on()
-    floor = [Block(i* block_size, HEIGHT - block_size, block_size) 
+    floor = [Block(i* block_size, HEIGHT - block_size, block_size,1) 
              for i in range(-WIDTH // block_size, WIDTH*2//block_size)]
     #blocks = [Block(0,HEIGHT - block_size,block_size)]
 
-    objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size),
-               Block(block_size * 3,HEIGHT - block_size * 4, block_size),fire,*saws]
+    objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size,2),
+               Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
     gameEnd = GameOver((WIDTH-1200)/2, (HEIGHT-618)/2,600,309)
     
     bars= [HealthBar(WIDTH-200,10,16,16)]
