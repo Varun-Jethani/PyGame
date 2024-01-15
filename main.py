@@ -19,6 +19,9 @@ FPS = 60
 PLAYER_VEL = 5
 window = pygame.display.set_mode((WIDTH,HEIGHT))
 
+gameEnd = pygame.image.load("Assets\Other\gameover.png").convert_alpha()
+
+
 
 def flip(sprites):
     return[pygame.transform.flip(sprite, True, False) for sprite in sprites]
@@ -60,11 +63,19 @@ def get_block(size,pos):
     surface.blit(image,(0,0),rect)
     return pygame.transform.scale2x(surface)
 
+def get_trap_block(size,pos):
+    path = join ("assets","Traps","Sand Mud Ice", "Sand Mud Ice (16x6).png")
+    image = pygame.image.load(path).convert_alpha()
+    surface = pygame.Surface((size,size),pygame.SRCALPHA,32)
+    rect = pygame.Rect(pos[0],pos[1],size,size)
+    surface.blit(image,(0,0),rect)
+    return pygame.transform.scale2x(surface)
+
 class Player(pygame.sprite.Sprite):
     COLOR = (255,0,0)
     GRAVITY = 1
     SPRITES = load_sprite_sheets("MainCharacters","VirtualGuy",32,32,True)
-    ANIMATION_DELAY = 3
+    ANIMATION_DELAY = 4
     
     def __init__(self,x,y,width,height):
         super().__init__()
@@ -119,11 +130,15 @@ class Player(pygame.sprite.Sprite):
 
     def loop(self, fps):
         self.y_vel += min(1, (self.fall_count/fps)*self.GRAVITY)
-        self.move(self.x_vel, self.y_vel)
+        if self.health > 0 :
+            self.move(self.x_vel, self.y_vel)
+
+        if self.rect.y > WIDTH:
+            self.health = 0
 
         if self.hit:
             self.hit_count += 1
-        if self.hit_count > fps*2:
+        if self.hit_count > fps/2:
             
             self.hit = False
 
@@ -284,13 +299,6 @@ class Saw(Object):
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.aniamtion_count = 0
 
-class GameOver(Object):
-    def __init__(self, x, y, width, height, name=None):
-        super().__init__(x, y, width, height, name="gameOver")
-        self.sprite_sheet = load_sprite_sheets("Other",None,width,height)
-        self.image = self.sprite_sheet["gameover"][0]
-        self.mask = pygame.mask.from_surface(self.image)
-
 class Menu(Object):
     def __init__(self, x, y, width, height, name=None):
         super().__init__(x, y, width, height, name="menu")
@@ -321,10 +329,13 @@ def draw (window, background, bg_image, player,objects,bars,gameEnd,offset_x):
     for bar in bars:
         bar.draw(window,player.health)
     if player.health == 0:
-        gameEnd.draw(window,0)
+        window.blit(gameEnd,((WIDTH-600)/2, (HEIGHT-309)/2))
         
+    pygame.display.update()
 
 
+def pause_draw():
+    
     pygame.display.update()
 
 def handle_vertical_collision(player, objects, dy):
@@ -335,8 +346,7 @@ def handle_vertical_collision(player, objects, dy):
                     player.spawned -= 1
             elif dy >= 0:
                 collision_point = pygame.sprite.collide_mask(player, obj)
-                print(collision_point)
-                print(player.rect.height)
+                
                 # Check if the collision happened at the bottom of sprite1's rect
                 if collision_point[1] >= player.rect.height-15:
                     player.rect.bottom = obj.rect.top
@@ -408,7 +418,7 @@ def main(window):
 
     objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size,2),
                Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
-    gameEnd = GameOver((WIDTH-1200)/2, (HEIGHT-618)/2,600,309)
+    
     
     bars= [HealthBar(WIDTH-200,10,16,16)]
     
@@ -428,13 +438,17 @@ def main(window):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     PAUSED= not PAUSED
+                    if PAUSED:
+                        pausesurf = pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
+                        pausesurf.fill((30,30,30,150))
+                        window.blit(pausesurf,(0,0))
 
                 if event.key == pygame.K_SPACE and player.jump_count < 2:
                     if not PAUSED:
                         player.jump()
 
         if PAUSED:
-            pass
+            pause_draw()
         else:
             player.loop(FPS)
             fire.loop()
