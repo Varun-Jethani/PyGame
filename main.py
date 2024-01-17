@@ -3,6 +3,7 @@ import random
 import math
 from typing import Any
 import pygame
+from button import Button
 from os import listdir
 from os.path import isfile, join
 import time
@@ -15,8 +16,11 @@ pygame.display.set_caption("Platformer")
 
 
 WIDTH, HEIGHT = 1300, 760
+PAUSED= False
 FPS = 60
 PLAYER_VEL = 5
+font_path = "assets\Fonts\\1_Minecraft-Regular.otf"
+
 window = pygame.display.set_mode((WIDTH,HEIGHT))
 
 gameEnd = pygame.image.load("Assets\Other\gameover.png").convert_alpha()
@@ -304,7 +308,11 @@ class Menu(Object):
         super().__init__(x, y, width, height, name="menu")
         self.buttons = load_sprite_sheets("Menu","Buttons",width,height)  
               
-
+def pause_button_pressed(no):
+    global PAUSED
+    if no == 0:
+        PAUSED = False
+        
 def get_background(name):
     image = pygame.image.load(join("assets","Background",name))
     _, _, width, height = image.get_rect()
@@ -333,9 +341,19 @@ def draw (window, background, bg_image, player,objects,bars,gameEnd,offset_x):
         
     pygame.display.update()
 
+def draw_text(surface,text,size,color,x,y,fit = False, fit_size = (0,0)):
+    font = pygame.font.Font(font_path,size)
+    img = font.render(text,False,color).convert_alpha()
+    if fit:
+        surface.blit(img,(x+(fit_size[0]-img.get_width())/2,y+(fit_size[1]-img.get_height())/2))
+    else:
+        surface.blit(img,(x,y))
 
-def pause_draw():
-    
+
+def pause_draw(surface, buttons):
+    for i in range(len(buttons)):
+        if buttons[i].draw(surface):
+            pause_button_pressed(i)
     pygame.display.update()
 
 def handle_vertical_collision(player, objects, dy):
@@ -401,6 +419,7 @@ def handle_move(player,objects):
 
 
 def main(window):
+    global PAUSED
     clock = pygame.time.Clock()
     background, bg_image = get_background("Blue.png")
 
@@ -418,18 +437,21 @@ def main(window):
 
     objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size,2),
                Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
-    
+    buttonimage = pygame.image.load("assets\Menu\Buttons\menubutton.png").convert_alpha()
+    buttonimage.set_alpha(80)
+    pausemenu_buttons = [Button((WIDTH-302)/2,(HEIGHT-504)/2 + 89*i,buttonimage,1) for i in range(5)]
+    pausemenu_actions = ["Resume","Restart","Settings","Progress","Main Menu"]
     
     bars= [HealthBar(WIDTH-200,10,16,16)]
     
     offset_x = 0
     scroll_area_width = 200
-    PAUSED=False
+    
 
     run = True
     while run:
         clock.tick(FPS)
-
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
@@ -437,7 +459,7 @@ def main(window):
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    PAUSED= not PAUSED
+                    PAUSED = not PAUSED
                     if PAUSED:
                         pausesurf = pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
                         pausesurf.fill((30,30,30,150))
@@ -448,7 +470,9 @@ def main(window):
                         player.jump()
 
         if PAUSED:
-            pause_draw()
+            pause_draw(window,pausemenu_buttons)
+            for i in range(5):
+                draw_text(window,pausemenu_actions[i],26,(255,255,255,255),(WIDTH-302)/2,(HEIGHT-504)/2 + 89*i,True,(302,57))
         else:
             player.loop(FPS)
             fire.loop()
