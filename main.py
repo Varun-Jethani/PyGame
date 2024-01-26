@@ -22,21 +22,24 @@ PLAYER_VEL = 5
 font_path = "assets\Fonts\\1_Minecraft-Regular.otf"
 
 window = pygame.display.set_mode((WIDTH,HEIGHT))
-
+clock = pygame.time.Clock()
 gameEnd = pygame.image.load("Assets\Other\gameover.png").convert_alpha()
 
 
 
-def flip(sprites):
+def flip(sprites): 
+    '''function for fliping images'''
     return[pygame.transform.flip(sprite, True, False) for sprite in sprites]
 
 def load_sprite_sheets(dir1,dir2,width,height,direction=False):
-    if dir2 == None:
+    '''Function for loading sheets of single sprite for giving it multiple images
+     \nNOTE always applies scale2x for each image'''
+    if dir2 == None:                                            
         path = join("assets",dir1)
     else:
         path = join("assets",dir1,dir2)
     
-    images = [f for f in listdir(path) if isfile(join(path,f))]
+    images = [f for f in listdir(path) if isfile(join(path,f))] 
     
     all_sprites = {}
 
@@ -59,8 +62,12 @@ def load_sprite_sheets(dir1,dir2,width,height,direction=False):
 
     return all_sprites
             
-def get_block(size,pos):
-    path = join("assets","Terrain","Terrain.png")
+def get_block(size,pos): 
+    '''
+    gets the square block image from pos in terrain png of size  
+    \n NOTE Always Applies scale 2x 
+    '''  
+    path = join("assets","Terrain","Terrain.png") 
     image = pygame.image.load(path).convert_alpha()
     surface = pygame.Surface((size,size),pygame.SRCALPHA,32)
     rect = pygame.Rect(pos[0],pos[1],size,size)
@@ -68,12 +75,15 @@ def get_block(size,pos):
     return pygame.transform.scale2x(surface)
 
 def get_trap_block(size,pos):
+    '''gets sqaure block image from pos in Sand Mud Ice png of size
+    \n NOTE Always Applies scale 2x'''
     path = join ("assets","Traps","Sand Mud Ice", "Sand Mud Ice (16x6).png")
     image = pygame.image.load(path).convert_alpha()
     surface = pygame.Surface((size,size),pygame.SRCALPHA,32)
     rect = pygame.Rect(pos[0],pos[1],size,size)
     surface.blit(image,(0,0),rect)
     return pygame.transform.scale2x(surface)
+
 
 class Player(pygame.sprite.Sprite):
     COLOR = (255,0,0)
@@ -82,6 +92,9 @@ class Player(pygame.sprite.Sprite):
     ANIMATION_DELAY = 4
     
     def __init__(self,x,y,width,height):
+        """Player Class x y is left and top
+         creates a player object with various properties 
+         and method to control the player movement and animation"""
         super().__init__()
         self.rect = pygame.Rect(x,y,width,height)
         self.x_vel = 0
@@ -97,42 +110,49 @@ class Player(pygame.sprite.Sprite):
         self.health_counter=0
         self.spawned = 12
         
-
-
     def jump(self):
+        """ function for jump, gives player upward velocity """
         self.y_vel = -self.GRAVITY * 8
         self.animation_count=0
         self.jump_count += 1
         if self.jump_count == 1:
             self.fall_count = 0
         
-
-
     def move(self,dx, dy):
+        """ function for moving player by dx and dy (pass the x and y velocity)"""
         self.rect.x += dx
         self.rect.y += dy
 
-
     def make_hit(self):
+        """ gives the player a hit state and reduces the health """
         self.hit = True
         self.hit_count = 0
         if self.health > 0:
             self.health-=1
         
-
     def move_left(self, vel):
+        """ changes the players horizontal velocity towards left
+          and changes the direction the player is facing to left"""
         self.x_vel = -vel
         if self.direction != "left":
             self.direction = "left"
             self.animation_count = 0
         
-    def move_right(self, vel):    
+    def move_right(self, vel): 
+        """ changes the players horizontal velocity towards right
+          and changes the direction the player is facing to right"""   
         self.x_vel = vel
         if self.direction != "right":
             self.direction = "right"
             self.animation_count = 0
 
     def loop(self, fps):
+        """ constantly changes the players y velocity to  give gravity effect
+        checks if player has health
+        moves the players rect using x_vel and y_vel property
+        checks if player has fallen off
+        maintains hit check
+        and updates the sprite"""
         self.y_vel += min(1, (self.fall_count/fps)*self.GRAVITY)
         if self.health > 0 :
             self.move(self.x_vel, self.y_vel)
@@ -150,15 +170,19 @@ class Player(pygame.sprite.Sprite):
         self.update_sprite()
 
     def landed(self):
+        """resets properties so player doesn't glitch out due to gravity"""
         self.fall_count = 0
         self.y_vel = 0
         self.jump_count = 0
 
     def hit_header(self):
+        """reverses the players y velocity"""
         self.count = 0
         self.y_vel *= -1
 
     def update_sprite(self):
+        """updates the sprite according to players state 
+        utilizes properties health,y_vel,x_vel,jump_count,gravity,direction"""
         sprite_sheet = "idle"
 
         if self.health ==0:
@@ -191,8 +215,8 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.sprite.get_rect(topleft = (self.rect.x,self.rect.y))
         self.mask = pygame.mask.from_surface(self.sprite)
 
-
     def draw(self, win, offset_x):
+        """ draws the sprite on win surface """
         # pygame.draw.rect(win,self.COLOR,self.rect)
         #self.sprite = self.SPRITES["idle_"+self.direction][0]
         win.blit(self.sprite, (self.rect.x - offset_x ,self.rect.y))
@@ -210,6 +234,7 @@ class Object(pygame.sprite.Sprite):
     def draw(self,win, offset_x):
         win.blit(self.image,(self.rect.x - offset_x ,self.rect.y))
 
+
 class Bar(pygame.sprite.Sprite):
     def __init__(self,x,y,width,height, name = None):
         super().__init__()
@@ -224,13 +249,11 @@ class Bar(pygame.sprite.Sprite):
             win.blit(self.image,(self.rect.x + (self.width*i) ,self.rect.y))
 
 
-
 class HealthBar(Bar):
     def __init__(self, x, y, width, height, name="Health"):
         super().__init__(x, y, width, height, name="health")
         self.bar = load_sprite_sheets("Bars",None, width,height)
         self.image = self.bar["colors"][1]
-        
 
 
 class Block(Object):
@@ -241,6 +264,7 @@ class Block(Object):
         
         self.image.blit(blocks[type],(0,0))
         self.mask = pygame.mask.from_surface(self.image)
+
 
 class Fire (Object):
     ANIMATION_DELAY = 4
@@ -272,6 +296,7 @@ class Fire (Object):
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.aniamtion_count = 0 
         
+
 class Saw(Object):
     ANIMATION_DELAY = 4
     
@@ -303,16 +328,32 @@ class Saw(Object):
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.aniamtion_count = 0
 
+
 class Menu(Object):
     def __init__(self, x, y, width, height, name=None):
         super().__init__(x, y, width, height, name="menu")
         self.buttons = load_sprite_sheets("Menu","Buttons",width,height)  
-              
-def pause_button_pressed(no):
-    global PAUSED
-    if no == 0:
-        PAUSED = False
-        
+
+
+def menu_button_pressed(menu,no):
+    global PAUSED, window, menu_run, run
+    if menu == "pause":
+        if no == 0:
+            PAUSED = False
+        if no == 1:
+            PAUSED = False
+            main(window)
+        if no == 4:
+            run = False
+            PAUSED = False
+            main_menu(window)
+
+    elif menu == "main":
+        if no == 0:
+            main(window)
+        if no == 3:
+            menu_run = False
+                        
 def get_background(name):
     image = pygame.image.load(join("assets","Background",name))
     _, _, width, height = image.get_rect()
@@ -325,8 +366,8 @@ def get_background(name):
     return tiles, image
 
 def draw (window, background, bg_image, player,objects,bars,gameEnd,offset_x):
-    for tile in background:
-        window.blit(bg_image, tile)
+    # for tile in background:
+    #     window.blit(bg_image, tile)
 
     player.draw(window, offset_x)
     for obj in objects:
@@ -349,11 +390,10 @@ def draw_text(surface,text,size,color,x,y,fit = False, fit_size = (0,0)):
     else:
         surface.blit(img,(x,y))
 
-
-def pause_draw(surface, buttons):
+def menu_draw(surface,menu, buttons):
     for i in range(len(buttons)):
         if buttons[i].draw(surface):
-            pause_button_pressed(i)
+            menu_button_pressed(menu,i)
     pygame.display.update()
 
 def handle_vertical_collision(player, objects, dy):
@@ -418,10 +458,15 @@ def handle_move(player,objects):
             player.make_hit()
 
 
+#Screen Functions
 def main(window):
-    global PAUSED
-    clock = pygame.time.Clock()
+    """Opens the game Screen"""
+    global PAUSED, run
+    
     background, bg_image = get_background("Blue.png")
+    #bg = pygame.image.load("assets\\New BG\\semibg.png").convert_alpha()
+    
+    #window.blit(bg,(0,0))
 
     block_size = 96
     
@@ -431,14 +476,14 @@ def main(window):
     saws = [Saw(200, HEIGHT - block_size -74,38,38),Saw(400, HEIGHT - block_size -74,38,38),Saw(800, HEIGHT - block_size -74,38,38),Saw(1200, HEIGHT - block_size -74,38,38)]
     for saw in saws:
         saw.on()
-    floor = [Block(i* block_size, HEIGHT - block_size, block_size,1) 
+    floor = [Block(i* block_size, HEIGHT - block_size, block_size,3) 
              for i in range(-WIDTH // block_size, WIDTH*2//block_size)]
     #blocks = [Block(0,HEIGHT - block_size,block_size)]
 
     objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size,2),
                Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
     buttonimage = pygame.image.load("assets\Menu\Buttons\menubutton.png").convert_alpha()
-    buttonimage.set_alpha(80)
+    buttonimage.set_alpha(30)
     pausemenu_buttons = [Button((WIDTH-302)/2,(HEIGHT-504)/2 + 89*i,buttonimage,1) for i in range(5)]
     pausemenu_actions = ["Resume","Restart","Settings","Progress","Main Menu"]
     
@@ -470,7 +515,7 @@ def main(window):
                         player.jump()
 
         if PAUSED:
-            pause_draw(window,pausemenu_buttons)
+            menu_draw(window,"pause",pausemenu_buttons)
             for i in range(5):
                 draw_text(window,pausemenu_actions[i],26,(255,255,255,255),(WIDTH-302)/2,(HEIGHT-504)/2 + 89*i,True,(302,57))
         else:
@@ -491,5 +536,32 @@ def main(window):
     pygame.quit()
     quit()
 
+def main_menu(window):
+    """Opens the main menu screen"""
+    bg = pygame.image.load("assets\Background\\bg.jpg").convert_alpha()
+    bgimg = pygame.transform.scale(bg,(WIDTH,HEIGHT))
+    window.blit(bgimg,(0,0))
+
+    
+    buttonimage = pygame.image.load("assets\Menu\Buttons\MMButton2.png").convert_alpha()
+    buttonimage.set_alpha(30)
+    menu_buttons = [Button(100,((HEIGHT- 495)/2 + (141*i)),buttonimage,1) for i in range(4)]
+    menu_action = ["PLAY","Progress","Settings","Quit"]
+    global menu_run
+    menu_run = True
+    while menu_run:
+        clock.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                menu_run = False
+                break
+
+        menu_draw(window,"main",menu_buttons)
+        for i in range(4):
+            draw_text(window,menu_action[i],32,(0,0,0,0),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72))
+
+def  progress(window):
+    """Opens the progress screen"""
+
 if __name__ == "__main__":
-    main(window)
+    main_menu(window)
