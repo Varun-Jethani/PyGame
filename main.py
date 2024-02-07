@@ -15,15 +15,16 @@ pygame.init()
 pygame.display.set_caption("Platformer")
 
 
-WIDTH, HEIGHT = 1300, 760
+WIDTH, HEIGHT = 1300, 768
+GREEN = (147, 200, 8)
 PAUSED= False
 FPS = 60
 PLAYER_VEL = 5
-font_path = "assets\Fonts\\1_Minecraft-Regular.otf"
+font_path = "assets\\Fonts\\1_Minecraft-Regular.otf"
 
 window = pygame.display.set_mode((WIDTH,HEIGHT))
 clock = pygame.time.Clock()
-gameEnd = pygame.image.load("Assets\Other\gameover.png").convert_alpha()
+gameEnd = pygame.image.load("Assets\\Other\\gameover.png").convert_alpha()
 
 
 
@@ -88,7 +89,7 @@ def get_trap_block(size,pos):
 class Player(pygame.sprite.Sprite):
     COLOR = (255,0,0)
     GRAVITY = 1
-    SPRITES = load_sprite_sheets("MainCharacters","VirtualGuy",32,32,True)
+    SPRITES = load_sprite_sheets("MainCharacters","NinjaFrog",32,32,True)
     ANIMATION_DELAY = 4
     
     def __init__(self,x,y,width,height):
@@ -365,10 +366,51 @@ def get_background(name):
 
     return tiles, image
 
-def draw (window, background, bg_image, player,objects,bars,gameEnd,offset_x):
+def backgroundloader(folder):
+    bgpath = join("assets",folder)
+
+    imgs = [f for f in listdir(bgpath) if isfile(join(bgpath,f))]
+    bg={}
+    for img in imgs:
+        bg[img.replace(".png","")]=[pygame.image.load(join(bgpath,img)).convert_alpha()]
+
+    bg["bluesky"].append((bg["bluesky"][0].get_width(),0))
+    bg["clouds"].append((bg["clouds"][0].get_width(),50))
+    bg["Mountains2"].append((bg["Mountains2"][0].get_width(),200))
+    bg["Treessilu"].append((bg["Treessilu"][0].get_width(),450))
+    bg["riverbankback"].append((bg["riverbankback"][0].get_width(),510))
+    bg["river"].append((bg["river"][0].get_width(),570))
+    bg["riverbankfront"].append((bg["riverbankfront"][0].get_width(),600))
+    bg["trees"].append((bg["trees"][0].get_width(),400))
+    bglist = {"clouds":0.1,
+              "Mountains2":0.2,
+              "Treessilu":0.3,
+              "riverbankback":0.5,
+              "river":0.7,
+              "riverbankfront":0.9,
+              "trees":0.9}
+    return bg, bglist
+
+def draw (window,bg,bglist, background, bg_image, player,objects,bars,gameEnd,offset_x):
     # for tile in background:
     #     window.blit(bg_image, tile)
+    window.fill(GREEN)
+    window.blit(bg["bluesky"][0],(0,0))
+    
+    
+    for compo in bglist:
+        for i in range(-4,9,1):
+            window.blit(bg[compo][0],((bg[compo][1][0]-4)*i - offset_x*bglist[compo], bg[compo][1][1]))
 
+    # window.blit(bg["bluesky"][0],bg["bluesky"][1]) 
+    # window.blit(bg["clouds"][0],(bg["clouds"][1][0]-offset_x*0.4,bg["clouds"][1][1]))
+    # window.blit(bg["Mountains2"][0],(bg["Mountains2"][1][0]-offset_x*0.5,bg["Mountains2"][1][1]))
+    # window.blit(bg["Treessilu"][0],(bg["Treessilu"][1][0] - offset_x*0.6,bg["Treessilu"][1][1]))
+    # window.blit(bg["riverbankback"][0],(bg["riverbankback"][1][0]-offset_x*0.7,bg["riverbankback"][1][1]))
+    # window.blit(bg["river"][0],(bg["river"][1][0]-offset_x*0.8,bg["river"][1][1]))
+    # window.blit(bg["riverbankfront"][0],(bg["riverbankfront"][1][0]-offset_x*0.9,bg["riverbankfront"][1][1]))
+    # window.blit(bg["trees"][0],(bg["trees"][1][0]-offset_x,bg["trees"][1][1]))
+    
     player.draw(window, offset_x)
     for obj in objects:
         obj.draw(window, offset_x)
@@ -464,9 +506,8 @@ def main(window):
     global PAUSED, run
     
     background, bg_image = get_background("Blue.png")
-    #bg = pygame.image.load("assets\\New BG\\semibg.png").convert_alpha()
+    bg, bglist = backgroundloader("New BG")
     
-    #window.blit(bg,(0,0))
 
     block_size = 96
     
@@ -476,13 +517,24 @@ def main(window):
     saws = [Saw(200, HEIGHT - block_size -74,38,38),Saw(400, HEIGHT - block_size -74,38,38),Saw(800, HEIGHT - block_size -74,38,38),Saw(1200, HEIGHT - block_size -74,38,38)]
     for saw in saws:
         saw.on()
+    negfloor= [Block(i* block_size, HEIGHT - block_size, block_size,3) 
+             for i in range(-WIDTH//block_size- 7, -WIDTH*2//block_size,-1)]
     floor = [Block(i* block_size, HEIGHT - block_size, block_size,3) 
-             for i in range(-WIDTH // block_size, WIDTH*2//block_size)]
+             for i in range(-WIDTH // block_size, WIDTH//block_size)]
+    
+    floor2 = [Block(i* block_size, HEIGHT - block_size, block_size,3) 
+             for i in range(WIDTH//block_size+ 2, WIDTH*2//block_size)]
+    floor3 = [Block(i* block_size, HEIGHT - block_size, block_size,3) 
+             for i in range(WIDTH*2//block_size+ 3, WIDTH*3//block_size)]
+    floor4 = [Block(i* block_size, HEIGHT - block_size, block_size,3) 
+             for i in range(WIDTH*3//block_size+ 4, WIDTH*4//block_size)]
+    floor5 = [Block(i* block_size + block_size/2, HEIGHT - block_size, block_size,3) 
+             for i in range(WIDTH*4//block_size+ 4, WIDTH*5//block_size)]
     #blocks = [Block(0,HEIGHT - block_size,block_size)]
 
-    objects = [*floor, Block(0,HEIGHT - block_size * 2, block_size,2),
+    objects = [*negfloor, *floor,*floor2,*floor3,*floor4,*floor5, Block(0,HEIGHT - block_size * 2, block_size,2),
                Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
-    buttonimage = pygame.image.load("assets\Menu\Buttons\menubutton.png").convert_alpha()
+    buttonimage = pygame.image.load("assets\\Menu\\Buttons\\menubutton.png").convert_alpha()
     buttonimage.set_alpha(30)
     pausemenu_buttons = [Button((WIDTH-302)/2,(HEIGHT-504)/2 + 89*i,buttonimage,1) for i in range(5)]
     pausemenu_actions = ["Resume","Restart","Settings","Progress","Main Menu"]
@@ -490,7 +542,7 @@ def main(window):
     bars= [HealthBar(WIDTH-200,10,16,16)]
     
     offset_x = 0
-    scroll_area_width = 200
+    scroll_area_width = 400
     
 
     run = True
@@ -526,7 +578,7 @@ def main(window):
 
             handle_move(player,objects)
             # handle_game_over(player,window)
-            draw(window, background, bg_image, player, objects,bars,gameEnd, offset_x)
+            draw(window, bg, bglist, background, bg_image, player, objects,bars,gameEnd, offset_x)
 
             if ((player.rect.right - offset_x >= WIDTH - scroll_area_width) and player.x_vel > 0) or (
                 (player.rect.left - offset_x <= scroll_area_width) and player.x_vel < 0 ):
@@ -538,12 +590,12 @@ def main(window):
 
 def main_menu(window):
     """Opens the main menu screen"""
-    bg = pygame.image.load("assets\Background\\bg.jpg").convert_alpha()
+    bg = pygame.image.load("assets\\Background\\bg.jpg").convert_alpha()
     bgimg = pygame.transform.scale(bg,(WIDTH,HEIGHT))
     window.blit(bgimg,(0,0))
 
     
-    buttonimage = pygame.image.load("assets\Menu\Buttons\MMButton2.png").convert_alpha()
+    buttonimage = pygame.image.load("assets\\Menu\\Buttons\\MMButton2.png").convert_alpha()
     buttonimage.set_alpha(30)
     menu_buttons = [Button(100,((HEIGHT- 495)/2 + (141*i)),buttonimage,1) for i in range(4)]
     menu_action = ["PLAY","Progress","Settings","Quit"]
@@ -558,7 +610,7 @@ def main_menu(window):
 
         menu_draw(window,"main",menu_buttons)
         for i in range(4):
-            draw_text(window,menu_action[i],32,(0,0,0,0),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72))
+            draw_text(window,menu_action[i],32,(177,213,238,0),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72))
 
 def  progress(window):
     """Opens the progress screen"""
