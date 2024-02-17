@@ -1,0 +1,28 @@
+{"music":[
+    {
+        "file":"embrace-12278.mp3", 
+        "Title": "Embrace", 
+        "Author": "ItsWatR(Jonas)", 
+        "src":"https://pixabay.com/music/future-bass-embrace-12278/",
+        "attribution":"Music by Jonas from Pixabay",
+        "img":"https://i1.sndcdn.com/artworks-rBrw5hVRK9oPugT0-8K9ptA-t500x500.jpg"
+        
+    },
+    {
+        "file":"tvari-tokyo-cafe-159065.mp3",
+        "Title": "Tokyo Cafe",
+        "Author": "Tvari",
+        "src":"https://pixabay.com/music/tokyo-cafe-159065/",
+        "attribution":"Music by Tvari from Pixabay",
+        "img":"https://i1.sndcdn.com/artworks-sM2owiF7lu9aX5EV-ERWZ8A-t240x240.jpg"
+    },
+    {
+        "file":"Ukele-trip-version",
+        "Title": "Ukele Trip",
+        "Author": "Lesfm", 
+        "src":"https://pixabay.com/music/acoustic-group-ukulele-trip-version-60s-9893/",
+        "attribution":"Music by Lesfm from Pixabay",
+        "img":"https://i1.sndcdn.com/artworks-rVrwO4f4axovo9Ww-UiAjJQ-t500x500.jpg"
+    }
+        
+         ] }

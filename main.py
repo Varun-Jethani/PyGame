@@ -7,6 +7,9 @@ from button import Button
 from os import listdir
 from os.path import isfile, join
 import time
+import requests
+from io import BytesIO
+import json
 
 from pygame.sprite import Group
 
@@ -21,12 +24,26 @@ PAUSED= False
 FPS = 60
 PLAYER_VEL = 5
 font_path = "assets\\Fonts\\1_Minecraft-Regular.otf"
+screen = ''
 
 window = pygame.display.set_mode((WIDTH,HEIGHT))
 clock = pygame.time.Clock()
 gameEnd = pygame.image.load("Assets\\Other\\gameover.png").convert_alpha()
 
+nextsong = pygame.USEREVENT + 9
 
+VolumeUp = pygame.USEREVENT + 1
+VolumeDown = pygame.USEREVENT + 2
+VolumeMute = pygame.USEREVENT + 3
+VolumeUnmute = pygame.USEREVENT + 4
+
+
+
+jumpsfx = pygame.mixer.Sound("assets\\Soundfx\\cartoon-jump-6462.mp3")
+landsfx = pygame.mixer.Sound("assets\\Soundfx\\land2-43790.mp3")
+hitsfx = pygame.mixer.Sound("assets\\Soundfx\\mixkit-small-hit-in-a-game-2072.wav")
+achsfx = pygame.mixer.Sound("assets\\Soundfx\\mixkit-game-experience-level-increased-2062.wav")
+gameoversfx = pygame.mixer.Sound("assets\\Soundfx\\negative_beeps-6008.mp3")
 
 def flip(sprites): 
     '''function for fliping images'''
@@ -85,6 +102,16 @@ def get_trap_block(size,pos):
     surface.blit(image,(0,0),rect)
     return pygame.transform.scale2x(surface)
 
+def round_image(image, radius):
+    """Return a new image with rounded corners."""
+    rect = pygame.Rect(0, 0, *image.get_size())
+    mask = pygame.Surface(rect.size, pygame.SRCALPHA)
+    pygame.draw.rect(mask, pygame.Color('white'), rect, border_radius=radius)
+    mask.blit(image, rect, special_flags=pygame.BLEND_RGBA_MULT)
+    return mask
+
+
+
 
 class Player(pygame.sprite.Sprite):
     COLOR = (255,0,0)
@@ -110,10 +137,14 @@ class Player(pygame.sprite.Sprite):
         self.health = 100
         self.health_counter=0
         self.spawned = 12
+        self.land = 0
+        self.over_counter = 0
+        self.air_counter = 0
         
     def jump(self):
         """ function for jump, gives player upward velocity """
         self.y_vel = -self.GRAVITY * 8
+        jumpsfx.play()
         self.animation_count=0
         self.jump_count += 1
         if self.jump_count == 1:
@@ -155,6 +186,9 @@ class Player(pygame.sprite.Sprite):
         maintains hit check
         and updates the sprite"""
         self.y_vel += min(1, (self.fall_count/fps)*self.GRAVITY)
+        if (int(self.y_vel)>0):
+            self.air_counter +=1
+        
         if self.health > 0 :
             self.move(self.x_vel, self.y_vel)
 
@@ -175,11 +209,15 @@ class Player(pygame.sprite.Sprite):
         self.fall_count = 0
         self.y_vel = 0
         self.jump_count = 0
+        if self.air_counter > 0:
+            landsfx.play()
+            self.air_counter =0
 
     def hit_header(self):
         """reverses the players y velocity"""
         self.count = 0
         self.y_vel *= -1
+        landsfx.play()
 
     def update_sprite(self):
         """updates the sprite according to players state 
@@ -188,9 +226,16 @@ class Player(pygame.sprite.Sprite):
 
         if self.health ==0:
             sprite_sheet = "Disappear"
+            if self.over_counter < 10:
+                self.over_counter+=1
+            if self.over_counter == 10:
+                gameoversfx.play()
+                self.over_counter+=1
+
 
         elif self.hit:
             sprite_sheet= "hit"
+            hitsfx.play()
             
 
         elif self.y_vel < 0 :
@@ -222,6 +267,70 @@ class Player(pygame.sprite.Sprite):
         #self.sprite = self.SPRITES["idle_"+self.direction][0]
         win.blit(self.sprite, (self.rect.x - offset_x ,self.rect.y))
 
+class MusicPlayer:
+    def __init__(self,path) -> None:
+        self.music_files = [f for f in listdir(path) if isfile(join(path,f)) and f.endswith(".mp3")]
+        self.music_files = [join(path,m) for m in self.music_files]
+        self.current_song_index = 0
+        self.volume = 0.6
+        self.iplay = True
+        self.loadmetadata()
+        self.imageloader()
+        
+    def loadmetadata(self):
+        self.metadata = {}
+        with open("assets\\Music\\Meta.json","r") as file:
+            self.metadata = json.load(file)
+            print(self.metadata)
+            file.close()
+
+    def imageloader(self):
+        self.imageloc = requests.get(self.metadata["music"][self.current_song_index]["img"])
+        self.image = pygame.image.load(BytesIO(self.imageloc.content)).convert_alpha()
+        self.image = pygame.transform.scale(self.image,(80,80))
+        self.image = round_image(self.image, 10)
+
+    def play(self):
+        pygame.mixer.music.load(self.music_files[self.current_song_index])
+        pygame.mixer.music.play()
+        pygame.mixer.music.set_endevent(nextsong)
+        pygame.mixer.music.set_volume(self.volume)
+        self.imageloader()
+        print(pygame.mixer.music.get_volume())
+
+    def playpause(self):
+        self.iplay = not self.iplay
+        if self.iplay:
+            pygame.mixer.music.unpause()
+        else:
+            pygame.mixer.music.pause()
+        
+
+    def next(self):
+        if self.current_song_index == (len(self.music_files)-1) :
+            self.current_song_index = 0
+        else:
+            self.current_song_index+=1
+        self.play()
+
+    def prev(self):
+        if self.current_song_index == 0:
+            self.current_song_index =len(self.current_song_index) - 1
+        else:
+            self.current_song_index -= 1
+        self.play()
+
+    def changevolume(self, volume):
+        self.volume -= volume
+        pygame.mixer.music.set_volume(self.volume)
+    
+    def draw(self,win):
+        if screen=="main menu":
+            win.blit(self.image,(WIDTH-390,HEIGHT-158))
+            draw_text(win,self.metadata["music"][self.current_song_index]["Title"],22,(0,0,0,255),WIDTH-290,HEIGHT-155,False,(400,30))
+            draw_text(win,self.metadata["music"][self.current_song_index]["Author"],18,(20,20,20,255),WIDTH-290,HEIGHT-130,False,(400,30))
+            draw_text(win,"Press N for Next Song",18,(0,0,0,255),WIDTH-385,HEIGHT-105,True,(400,30))
+        
 
 class Object(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, name= None):
@@ -391,9 +500,9 @@ def backgroundloader(folder):
               "trees":0.9}
     return bg, bglist
 
-def draw (window,bg,bglist, background, bg_image, player,objects,bars,gameEnd,offset_x):
-    # for tile in background:
-    #     window.blit(bg_image, tile)
+def draw (window,bg,bglist,pausebutton, restart, close, player,objects,bars,gameEnd,offset_x):
+   
+    global PAUSED,run
     window.fill(GREEN)
     window.blit(bg["bluesky"][0],(0,0))
     
@@ -401,16 +510,8 @@ def draw (window,bg,bglist, background, bg_image, player,objects,bars,gameEnd,of
     for compo in bglist:
         for i in range(-4,9,1):
             window.blit(bg[compo][0],((bg[compo][1][0]-4)*i - offset_x*bglist[compo], bg[compo][1][1]))
-
-    # window.blit(bg["bluesky"][0],bg["bluesky"][1]) 
-    # window.blit(bg["clouds"][0],(bg["clouds"][1][0]-offset_x*0.4,bg["clouds"][1][1]))
-    # window.blit(bg["Mountains2"][0],(bg["Mountains2"][1][0]-offset_x*0.5,bg["Mountains2"][1][1]))
-    # window.blit(bg["Treessilu"][0],(bg["Treessilu"][1][0] - offset_x*0.6,bg["Treessilu"][1][1]))
-    # window.blit(bg["riverbankback"][0],(bg["riverbankback"][1][0]-offset_x*0.7,bg["riverbankback"][1][1]))
-    # window.blit(bg["river"][0],(bg["river"][1][0]-offset_x*0.8,bg["river"][1][1]))
-    # window.blit(bg["riverbankfront"][0],(bg["riverbankfront"][1][0]-offset_x*0.9,bg["riverbankfront"][1][1]))
-    # window.blit(bg["trees"][0],(bg["trees"][1][0]-offset_x,bg["trees"][1][1]))
     
+
     player.draw(window, offset_x)
     for obj in objects:
         obj.draw(window, offset_x)
@@ -421,12 +522,28 @@ def draw (window,bg,bglist, background, bg_image, player,objects,bars,gameEnd,of
         bar.draw(window,player.health)
     if player.health == 0:
         window.blit(gameEnd,((WIDTH-600)/2, (HEIGHT-309)/2))
+        if restart.draw(window):
+            main(window)
+        if close.draw(window):
+            run = False
+            main_menu(window)
+
+    if pausebutton.draw(window):
+        PAUSED = True
+        pausesurf = pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
+        pausesurf.fill((30,30,30,150))
+        window.blit(pausesurf,(0,0))
+
+    
+   
+
         
     pygame.display.update()
 
 def draw_text(surface,text,size,color,x,y,fit = False, fit_size = (0,0)):
     font = pygame.font.Font(font_path,size)
     img = font.render(text,False,color).convert_alpha()
+    #img.set_alpha(255)
     if fit:
         surface.blit(img,(x+(fit_size[0]-img.get_width())/2,y+(fit_size[1]-img.get_height())/2))
     else:
@@ -465,6 +582,8 @@ def handle_vertical_collision(player, objects, dy):
                 player.hit_header()
         
             collided_objects.append(obj)
+        else:
+            player.land =0 
     
     return collided_objects
 
@@ -499,11 +618,17 @@ def handle_move(player,objects):
         if obj and obj.name in ("fire","saw"):
             player.make_hit()
 
+#global objects
+music = MusicPlayer("assets\\Music")
+music.play()
+
+            
 
 #Screen Functions
 def main(window):
     """Opens the game Screen"""
-    global PAUSED, run
+    global PAUSED, run, music, screen
+    screen = "game"
     
     background, bg_image = get_background("Blue.png")
     bg, bglist = backgroundloader("New BG")
@@ -535,6 +660,12 @@ def main(window):
     objects = [*negfloor, *floor,*floor2,*floor3,*floor4,*floor5, Block(0,HEIGHT - block_size * 2, block_size,2),
                Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
     buttonimage = pygame.image.load("assets\\Menu\\Buttons\\menubutton.png").convert_alpha()
+    pausebuttonimage = pygame.image.load("assets\Menu\Buttons\Pause.png").convert_alpha()
+    pausebutton = Button(20,20,pausebuttonimage,1)
+    restartimage = pygame.image.load("assets\Menu\Buttons\Restart.png").convert_alpha()
+    restart = Button((WIDTH-restartimage.get_width()*9)/2,(HEIGHT+309)/2,restartimage,3)
+    closeimage = pygame.image.load("assets\Menu\Buttons\Close.png").convert_alpha()
+    close = Button((WIDTH-restartimage.get_width())/2,(HEIGHT+309)/2,closeimage,4.2)
     buttonimage.set_alpha(30)
     pausemenu_buttons = [Button((WIDTH-302)/2,(HEIGHT-504)/2 + 89*i,buttonimage,1) for i in range(5)]
     pausemenu_actions = ["Resume","Restart","Settings","Progress","Main Menu"]
@@ -554,6 +685,9 @@ def main(window):
                 run = False
                 break
 
+            if event.type == nextsong:
+                music.next()
+
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     PAUSED = not PAUSED
@@ -561,6 +695,20 @@ def main(window):
                         pausesurf = pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
                         pausesurf.fill((30,30,30,150))
                         window.blit(pausesurf,(0,0))
+                if event.key == pygame.K_n :
+                    music.next()
+                if event.key == pygame.K_p:
+                    music.next()
+                if event.key == pygame.K_3:
+                    music.changevolume(0.01)
+                if event.key == pygame.K_9:
+                    music.changevolume(-0.01)
+                if event.key == pygame.K_k:
+                    music.playpause()
+                
+                
+                
+
 
                 if event.key == pygame.K_SPACE and player.jump_count < 2:
                     if not PAUSED:
@@ -578,7 +726,7 @@ def main(window):
 
             handle_move(player,objects)
             # handle_game_over(player,window)
-            draw(window, bg, bglist, background, bg_image, player, objects,bars,gameEnd, offset_x)
+            draw(window, bg, bglist,pausebutton, restart, close, player, objects,bars,gameEnd, offset_x)
 
             if ((player.rect.right - offset_x >= WIDTH - scroll_area_width) and player.x_vel > 0) or (
                 (player.rect.left - offset_x <= scroll_area_width) and player.x_vel < 0 ):
@@ -590,15 +738,23 @@ def main(window):
 
 def main_menu(window):
     """Opens the main menu screen"""
+    global music, screen
+    screen = "main menu"
+
     bg = pygame.image.load("assets\\Background\\bg.jpg").convert_alpha()
     bgimg = pygame.transform.scale(bg,(WIDTH,HEIGHT))
     window.blit(bgimg,(0,0))
-
+    bgimg.set_alpha(20)
+    
+    musicBg = pygame.image.load("assets\\Menu\\Buttons\\musicbg1.png").convert_alpha()
+    musicBg.set_alpha(65)
+    #window.blit(musicBg,(WIDTH-400,HEIGHT-165))
     
     buttonimage = pygame.image.load("assets\\Menu\\Buttons\\MMButton2.png").convert_alpha()
-    buttonimage.set_alpha(30)
+    buttonimage.set_alpha(99)
     menu_buttons = [Button(100,((HEIGHT- 495)/2 + (141*i)),buttonimage,1) for i in range(4)]
     menu_action = ["PLAY","Progress","Settings","Quit"]
+    
     global menu_run
     menu_run = True
     while menu_run:
@@ -607,13 +763,36 @@ def main_menu(window):
             if event.type == pygame.QUIT:
                 menu_run = False
                 break
-
-        menu_draw(window,"main",menu_buttons)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_n :
+                    music.next()
+                if event.key == pygame.K_p:
+                    music.next()
+                if event.key == pygame.K_3:
+                    music.changevolume(0.01)
+                if event.key == pygame.K_9:
+                    music.changevolume(-0.01)
+                if event.key == pygame.K_k:
+                    music.playpause()
+        
+        window.blit(musicBg,(WIDTH-400,HEIGHT-165))
+        
+        
+        
+        music.draw(window)
         for i in range(4):
-            draw_text(window,menu_action[i],32,(177,213,238,0),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72))
+            draw_text(window,menu_action[i],32,(255,255,255,255),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72))
+            draw_text(window,menu_action[i],32,(150,200,255,255),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72)) #(177,213,238)
+        menu_draw(window,"main",menu_buttons)
+        window.blit(bgimg,(0,0))
+    
 
 def  progress(window):
     """Opens the progress screen"""
+
+def settings(window):
+    """Opens the settings screen"""
+
 
 if __name__ == "__main__":
     main_menu(window)
