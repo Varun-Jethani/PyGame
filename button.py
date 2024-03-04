@@ -20,13 +20,18 @@ class Button():
         #check mouseover and clicked conditions
         if self.rect.collidepoint(pos):
             self.currentimage = self.hovimage
+            pygame.mouse.set_cursor(*pygame.cursors.ball)
+
             if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-                action = True
                 self.clicked = True
+            
+            if pygame.mouse.get_pressed()[0] == 0 and self.clicked == True:
+                action = True
+                self.clicked = False
         else:
+            pygame.mouse.set_cursor(*pygame.cursors.arrow)
             self.currentimage = self.image
-        if pygame.mouse.get_pressed()[0] == 0:
-            self.clicked = False
+        
 
         #draw button
         surface.blit(self.currentimage, (self.rect.x, self.rect.y))

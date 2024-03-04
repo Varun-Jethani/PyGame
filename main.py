@@ -10,6 +10,7 @@ import time
 import requests
 from io import BytesIO
 import json
+from widgets import SettingSlider
 
 from pygame.sprite import Group
 
@@ -23,6 +24,7 @@ GREEN = (147, 200, 8)
 PAUSED= False
 FPS = 60
 PLAYER_VEL = 5
+MASTER_VOLUME = 0.5
 font_path = "assets\\Fonts\\1_Minecraft-Regular.otf"
 screen = ''
 
@@ -32,18 +34,31 @@ gameEnd = pygame.image.load("Assets\\Other\\gameover.png").convert_alpha()
 
 nextsong = pygame.USEREVENT + 9
 
-VolumeUp = pygame.USEREVENT + 1
-VolumeDown = pygame.USEREVENT + 2
-VolumeMute = pygame.USEREVENT + 3
-VolumeUnmute = pygame.USEREVENT + 4
 
 
+SoundVolume = 0.9
 
-jumpsfx = pygame.mixer.Sound("assets\\Soundfx\\cartoon-jump-6462.mp3")
-landsfx = pygame.mixer.Sound("assets\\Soundfx\\land2-43790.mp3")
-hitsfx = pygame.mixer.Sound("assets\\Soundfx\\mixkit-small-hit-in-a-game-2072.wav")
-achsfx = pygame.mixer.Sound("assets\\Soundfx\\mixkit-game-experience-level-increased-2062.wav")
-gameoversfx = pygame.mixer.Sound("assets\\Soundfx\\negative_beeps-6008.mp3")
+characters = ["NinjaFrog","MaskDude","PinkMan","VirtualGuy"]
+selected_character = 0
+
+
+class SoundPlayer:
+    jumpsfx = pygame.mixer.Sound("assets\\Soundfx\\cartoon-jump-6462.mp3")
+    landsfx = pygame.mixer.Sound("assets\\Soundfx\\land2-43790.mp3")
+    hitsfx = pygame.mixer.Sound("assets\\Soundfx\\mixkit-small-hit-in-a-game-2072.wav")
+    achsfx = pygame.mixer.Sound("assets\\Soundfx\\mixkit-game-experience-level-increased-2062.wav")
+    gameoversfx = pygame.mixer.Sound("assets\\Soundfx\\negative_beeps-6008.mp3")
+    def __init__(self):
+        self.SoundVolume = SoundVolume
+        
+    def setVolume(self, volume):
+        self.SoundVolume = volume
+        self.jumpsfx.set_volume(self.SoundVolume*MASTER_VOLUME)
+        self.landsfx.set_volume(self.SoundVolume*MASTER_VOLUME)
+        self.hitsfx.set_volume(self.SoundVolume*MASTER_VOLUME)
+        self.achsfx.set_volume(self.SoundVolume*MASTER_VOLUME)
+        self.gameoversfx.set_volume(self.SoundVolume*MASTER_VOLUME)
+        
 
 def flip(sprites): 
     '''function for fliping images'''
@@ -114,9 +129,11 @@ def round_image(image, radius):
 
 
 class Player(pygame.sprite.Sprite):
+    global characters,selected_character
+    
     COLOR = (255,0,0)
     GRAVITY = 1
-    SPRITES = load_sprite_sheets("MainCharacters","NinjaFrog",32,32,True)
+    SPRITES = load_sprite_sheets("MainCharacters",characters[selected_character],32,32,True)
     ANIMATION_DELAY = 4
     
     def __init__(self,x,y,width,height):
@@ -124,6 +141,7 @@ class Player(pygame.sprite.Sprite):
          creates a player object with various properties 
          and method to control the player movement and animation"""
         super().__init__()
+        self.SPRITES = load_sprite_sheets("MainCharacters",characters[selected_character],32,32,True)
         self.rect = pygame.Rect(x,y,width,height)
         self.x_vel = 0
         self.y_vel = -8
@@ -144,7 +162,7 @@ class Player(pygame.sprite.Sprite):
     def jump(self):
         """ function for jump, gives player upward velocity """
         self.y_vel = -self.GRAVITY * 8
-        jumpsfx.play()
+        sound.jumpsfx.play()
         self.animation_count=0
         self.jump_count += 1
         if self.jump_count == 1:
@@ -210,14 +228,14 @@ class Player(pygame.sprite.Sprite):
         self.y_vel = 0
         self.jump_count = 0
         if self.air_counter > 0:
-            landsfx.play()
+            sound.landsfx.play()
             self.air_counter =0
 
     def hit_header(self):
         """reverses the players y velocity"""
         self.count = 0
         self.y_vel *= -1
-        landsfx.play()
+        sound.landsfx.play()
 
     def update_sprite(self):
         """updates the sprite according to players state 
@@ -229,13 +247,13 @@ class Player(pygame.sprite.Sprite):
             if self.over_counter < 10:
                 self.over_counter+=1
             if self.over_counter == 10:
-                gameoversfx.play()
+                sound.gameoversfx.play()
                 self.over_counter+=1
 
 
         elif self.hit:
             sprite_sheet= "hit"
-            hitsfx.play()
+            sound.hitsfx.play()
             
 
         elif self.y_vel < 0 :
@@ -281,7 +299,6 @@ class MusicPlayer:
         self.metadata = {}
         with open("assets\\Music\\Meta.json","r") as file:
             self.metadata = json.load(file)
-            print(self.metadata)
             file.close()
 
     def imageloader(self):
@@ -294,7 +311,7 @@ class MusicPlayer:
         pygame.mixer.music.load(self.music_files[self.current_song_index])
         pygame.mixer.music.play()
         pygame.mixer.music.set_endevent(nextsong)
-        pygame.mixer.music.set_volume(self.volume)
+        pygame.mixer.music.set_volume(self.volume*MASTER_VOLUME)
         self.imageloader()
         print(pygame.mixer.music.get_volume())
 
@@ -315,14 +332,18 @@ class MusicPlayer:
 
     def prev(self):
         if self.current_song_index == 0:
-            self.current_song_index =len(self.current_song_index) - 1
+            self.current_song_index =len(self.music_files) - 1
         else:
             self.current_song_index -= 1
         self.play()
 
     def changevolume(self, volume):
         self.volume -= volume
-        pygame.mixer.music.set_volume(self.volume)
+        pygame.mixer.music.set_volume(self.volume*MASTER_VOLUME)
+
+    def setVolume(self, volume):
+        self.volume = volume
+        pygame.mixer.music.set_volume(self.volume*MASTER_VOLUME)
     
     def draw(self,win):
         if screen=="main menu":
@@ -371,6 +392,8 @@ class Block(Object):
         super().__init__(x, y, size, size)
         blocks_loc = [(0,0),(0,64),(0,128),(96,0),(96,64),(96,128),(192,0),(192,64),(192,128),(288,64),(288,128)]
         blocks = [get_block(size,loc) for loc in blocks_loc]
+        blocks.extend([pygame.transform.scale2x(get_block(size/2,(loc[0]+20,loc[1]+20))) for loc in blocks_loc])
+
         
         self.image.blit(blocks[type],(0,0))
         self.mask = pygame.mask.from_surface(self.image)
@@ -445,7 +468,7 @@ class Menu(Object):
         self.buttons = load_sprite_sheets("Menu","Buttons",width,height)  
 
 
-def menu_button_pressed(menu,no):
+def menu_button_pressed(menu,no,bgimg = None):
     global PAUSED, window, menu_run, run
     if menu == "pause":
         if no == 0:
@@ -453,6 +476,10 @@ def menu_button_pressed(menu,no):
         if no == 1:
             PAUSED = False
             main(window)
+        if no ==2:
+            PAUSED = False
+            settings(window,bgimg)
+        
         if no == 4:
             run = False
             PAUSED = False
@@ -463,6 +490,9 @@ def menu_button_pressed(menu,no):
             main(window)
         if no == 3:
             menu_run = False
+        if no == 2:
+            menu_run = False
+            settings(window,bgimg)
                         
 def get_background(name):
     image = pygame.image.load(join("assets","Background",name))
@@ -541,7 +571,7 @@ def draw (window,bg,bglist,pausebutton, restart, close, player,objects,bars,game
     pygame.display.update()
 
 def draw_text(surface,text,size,color,x,y,fit = False, fit_size = (0,0)):
-    font = pygame.font.Font(font_path,size)
+    font = pygame.font.Font(font_path,size) #pygame.font.SysFont("comicsans", size) 
     img = font.render(text,False,color).convert_alpha()
     #img.set_alpha(255)
     if fit:
@@ -549,10 +579,10 @@ def draw_text(surface,text,size,color,x,y,fit = False, fit_size = (0,0)):
     else:
         surface.blit(img,(x,y))
 
-def menu_draw(surface,menu, buttons):
+def menu_draw(surface,menu, buttons,bgimg = None):
     for i in range(len(buttons)):
         if buttons[i].draw(surface):
-            menu_button_pressed(menu,i)
+            menu_button_pressed(menu,i,bgimg)
     pygame.display.update()
 
 def handle_vertical_collision(player, objects, dy):
@@ -621,7 +651,7 @@ def handle_move(player,objects):
 #global objects
 music = MusicPlayer("assets\\Music")
 music.play()
-
+sound = SoundPlayer()
             
 
 #Screen Functions
@@ -674,6 +704,9 @@ def main(window):
     
     offset_x = 0
     scroll_area_width = 400
+
+    
+
     
 
     run = True
@@ -698,7 +731,7 @@ def main(window):
                 if event.key == pygame.K_n :
                     music.next()
                 if event.key == pygame.K_p:
-                    music.next()
+                    music.prev()
                 if event.key == pygame.K_3:
                     music.changevolume(0.01)
                 if event.key == pygame.K_9:
@@ -740,9 +773,10 @@ def main_menu(window):
     """Opens the main menu screen"""
     global music, screen
     screen = "main menu"
-
+    window.fill((0,0,0)) #fixes residue from previous screen
     bg = pygame.image.load("assets\\Background\\bg.jpg").convert_alpha()
     bgimg = pygame.transform.scale(bg,(WIDTH,HEIGHT))
+    bgimg.set_alpha(100)
     window.blit(bgimg,(0,0))
     bgimg.set_alpha(20)
     
@@ -760,6 +794,10 @@ def main_menu(window):
     while menu_run:
         clock.tick(FPS)
         for event in pygame.event.get():
+
+            if event.type == nextsong:  #Auto Play Next Song
+                music.next()
+
             if event.type == pygame.QUIT:
                 menu_run = False
                 break
@@ -767,14 +805,14 @@ def main_menu(window):
                 if event.key == pygame.K_n :
                     music.next()
                 if event.key == pygame.K_p:
-                    music.next()
+                    music.prev()
                 if event.key == pygame.K_3:
                     music.changevolume(0.01)
                 if event.key == pygame.K_9:
                     music.changevolume(-0.01)
                 if event.key == pygame.K_k:
                     music.playpause()
-        
+        window.blit(bgimg,(0,0))
         window.blit(musicBg,(WIDTH-400,HEIGHT-165))
         
         
@@ -783,16 +821,140 @@ def main_menu(window):
         for i in range(4):
             draw_text(window,menu_action[i],32,(255,255,255,255),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72))
             draw_text(window,menu_action[i],32,(150,200,255,255),100,((HEIGHT- 495)/2 + (141*i)),True,(300,72)) #(177,213,238)
-        menu_draw(window,"main",menu_buttons)
-        window.blit(bgimg,(0,0))
+        menu_draw(window,"main",menu_buttons,bgimg)
+        
     
 
 def  progress(window):
     """Opens the progress screen"""
 
-def settings(window):
+def settings(window, bgimg = None):
+    #window.fill((0,0,0)) #fixes residue from previous screen
+    
+    global menu_run,selected_character, music, sound, screen, MASTER_VOLUME, SoundVolume
+
+    if screen == "main menu":
+        window.fill((0,0,0))
+
+    #if screen == "game":
+        #window.fill((1, 122, 255))
     """Opens the settings screen"""
+    settingimg = pygame.image.load("assets\\Menu\\settingscreen.png").convert_alpha()
+    
+    window.blit(settingimg,((WIDTH-settingimg.get_width())/2,(HEIGHT-settingimg.get_height()-90)/2))
+    settingimg.set_alpha(50)
+    if bgimg:
+        bgimg.set_alpha(100)
+        window.blit(bgimg,(0,0))
+        bgimg.set_alpha(20)
+
+    pygame.display.update()
+    srun = True
+    Options=["Audio","Controls","Character"]
+    selected_option = 0
+    buttonfont = pygame.font.SysFont("comicsans", 32)
+    selectedfont = pygame.font.SysFont("comicsans", 32, bold=True)
+    settingfont = pygame.font.SysFont("comicsans", 25)
+    
+    
+    optionimg= [buttonfont.render(i,1,(30,30,30)) for i in Options]
+        
+
+    backimg = pygame.image.load("assets\\Menu\\Buttons\\arrow-left.png").convert_alpha()
+    backbutton = Button((WIDTH-settingimg.get_width())/2 + 50 ,(HEIGHT-settingimg.get_height()-100)/2 + 10,backimg,1)
+    characterimg = [pygame.image.load(join("assets","MainCharacters",c,"fall.png")).convert_alpha() for c in characters]
+    
+    characterimg = [pygame.transform.scale(c,(100,100)) for c in characterimg]
+    characterbutton = [Button((WIDTH-settingimg.get_width())/2 + 60 + (200*i),(HEIGHT-settingimg.get_height()-100)/2 + 100,characterimg[i],1) for i in range(4)]
+    musicBg = pygame.image.load("assets\\Menu\\Buttons\\musicbg1.png").convert_alpha()
+    masterVolumeSlider = SettingSlider(window,WIDTH-900,+HEIGHT-530,400,20,txt_colour = (0,0,0),initial=MASTER_VOLUME*100)
+    musicSettingSlider = SettingSlider(window,WIDTH-900,+HEIGHT-450,400,20,txt_colour = (0,0,0),initial=music.volume*100)
+    soundSettingSlider = SettingSlider(window,WIDTH-900,+HEIGHT-370,400,20,txt_colour = (0,0,0),initial=SoundVolume*100)
+    musicBg.set_alpha(65)
+    text = buttonfont.render("Current Character",1,(0,0,0))
+    optionbutton = [Button((WIDTH-settingimg.get_width())/2 + 200 + (200*i),(HEIGHT-settingimg.get_height()-100)/2 + 10,optionimg[i],1) for i in range(3)]
+    while srun:
+        clock.tick(FPS)
+        selectedoptionimg = selectedfont.render(Options[selected_option],1,(0,0,0)) 
+        
+        events = pygame.event.get()
+        for event in events:
+            if event.type == pygame.QUIT:
+                srun = False
+                menu_run = False
+                pygame.quit()
+                quit()
+
+            
+            if event.type == nextsong:
+                music.next()
+                
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    srun = False
+                    masterVolumeSlider.destroy()
+                    musicSettingSlider.destroy()
+                    soundSettingSlider.destroy()
+                    if screen == "main menu":
+                        main_menu(window)
+                    break
+        if bgimg:
+            window.blit(bgimg,(0,0))
+        
+        window.blit(settingimg,((WIDTH-settingimg.get_width())/2,(HEIGHT-settingimg.get_height()-90)/2))
+        for i in range(len(optionbutton)):
+            if i != selected_option:
+                if optionbutton[i].draw(window):
+                    selected_option = i
+        window.blit(selectedoptionimg,((WIDTH-settingimg.get_width())/2 + 200 + (200*selected_option),(HEIGHT-settingimg.get_height()-100)/2 + 10))
+
+        if backbutton.draw(window):
+            srun = False
+            masterVolumeSlider.destroy()
+            musicSettingSlider.destroy()
+            soundSettingSlider.destroy()
+            if screen == "main menu":
+                main_menu(window)
+            
+                
+               
+        pygame.display.update()
+        window.blit(musicBg,(WIDTH-400,HEIGHT-165))
+        music.draw(window)
+        if selected_option == 0:
+            mastertxtimg = settingfont.render("Master",False,(0,0,0)).convert_alpha()
+            window.blit(mastertxtimg,(WIDTH-1000,+HEIGHT-540))
+            masterVolumeSlider.update(events)
+            MASTER_VOLUME = masterVolumeSlider.getValue()/100
+            musictxtimg = settingfont.render("Music",False,(0,0,0)).convert_alpha()
+            window.blit(musictxtimg,(WIDTH-1000,+HEIGHT-460))
+            musicSettingSlider.update(events)
+            music.setVolume(musicSettingSlider.getValue()/100)
+            soundtxtimg = settingfont.render("Sound",False,(0,0,0)).convert_alpha()
+            window.blit(soundtxtimg,(WIDTH-1000,+HEIGHT-380))
+            soundSettingSlider.update(events)
+            SoundVolume = soundSettingSlider.getValue()/100
+            sound.setVolume(SoundVolume)
+            
+         
+        if selected_option == 2:
+            global selected_character
+            
+            window.blit(text,((WIDTH-settingimg.get_width())/2 + 60,(HEIGHT-settingimg.get_height()-100)/2 + 300)) 
+            #draw_text(window,"Current Character",32,(0,0,0,255),(WIDTH-settingimg.get_width())/2 + 60,(HEIGHT-settingimg.get_height()-100)/2 + 300,False,(400,30))
+            window.blit(characterimg[selected_character],((WIDTH-settingimg.get_width())/2 + 60 + (200*2),(HEIGHT-settingimg.get_height()-100)/2 + 250))
+            for i in range(4):
+                if characterbutton[i].draw(window):
+                    selected_character = i
+                    
+                    break
+                
+
+
+            
 
 
 if __name__ == "__main__":
     main_menu(window)
+
+    
