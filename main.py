@@ -11,8 +11,10 @@ import requests
 from io import BytesIO
 import json
 from widgets import SettingSlider
-
+from userfetch import *
 from pygame.sprite import Group
+from loadmap import *
+
 
 pygame.init()
 
@@ -27,6 +29,7 @@ PLAYER_VEL = 5
 MASTER_VOLUME = 0.5
 font_path = "assets\\Fonts\\1_Minecraft-Regular.otf"
 screen = ''
+level = user_level()
 
 window = pygame.display.set_mode((WIDTH,HEIGHT))
 clock = pygame.time.Clock()
@@ -158,6 +161,7 @@ class Player(pygame.sprite.Sprite):
         self.land = 0
         self.over_counter = 0
         self.air_counter = 0
+        self.won = False
         
     def jump(self):
         """ function for jump, gives player upward velocity """
@@ -207,7 +211,7 @@ class Player(pygame.sprite.Sprite):
         if (int(self.y_vel)>0):
             self.air_counter +=1
         
-        if self.health > 0 :
+        if self.health > 0 and not self.won:
             self.move(self.x_vel, self.y_vel)
 
         if self.rect.y > WIDTH:
@@ -241,7 +245,7 @@ class Player(pygame.sprite.Sprite):
         """updates the sprite according to players state 
         utilizes properties health,y_vel,x_vel,jump_count,gravity,direction"""
         sprite_sheet = "idle"
-
+        print(self.health)
         if self.health ==0:
             sprite_sheet = "Disappear"
             if self.over_counter < 10:
@@ -250,8 +254,14 @@ class Player(pygame.sprite.Sprite):
                 sound.gameoversfx.play()
                 self.over_counter+=1
 
+        if self.won:
+            sprite_sheet = "Disappear"
+            self.gravity = 0
+            
 
-        elif self.hit:
+
+
+        elif self.hit and self.health > 0:
             sprite_sheet= "hit"
             sound.hitsfx.play()
             
@@ -262,10 +272,10 @@ class Player(pygame.sprite.Sprite):
             elif self.jump_count == 2:
                 sprite_sheet = "double_jump"
         
-        elif self.y_vel > self.GRAVITY*2:
+        elif self.y_vel > self.GRAVITY*2 and self.health > 0:
             sprite_sheet = "fall"
 
-        elif self.x_vel != 0:
+        elif self.x_vel != 0 and self.health > 0:
             sprite_sheet = "run"
 
         sprite_sheet_name = sprite_sheet + "_" + self.direction
@@ -388,8 +398,8 @@ class HealthBar(Bar):
 
 
 class Block(Object):
-    def __init__(self, x, y, size,type):
-        super().__init__(x, y, size, size)
+    def __init__(self, x, y, size,type,name=None):
+        super().__init__(x, y, size, size,name)
         blocks_loc = [(0,0),(0,64),(0,128),(96,0),(96,64),(96,128),(192,0),(192,64),(192,128),(288,64),(288,128)]
         blocks = [get_block(size,loc) for loc in blocks_loc]
         blocks.extend([pygame.transform.scale2x(get_block(size/2,(loc[0]+20,loc[1]+20))) for loc in blocks_loc])
@@ -399,16 +409,12 @@ class Block(Object):
         self.mask = pygame.mask.from_surface(self.image)
 
 
-class Fire (Object):
+class TrapBlock(Object):
     ANIMATION_DELAY = 4
 
-    def __init__(self, x, y, width, height):
-        super().__init__(x, y, width, height, "fire")
-        self.fire = load_sprite_sheets("Traps","Fire",width,height)
-        self.image = self.fire["off"][0]
-        self.mask = pygame.mask.from_surface(self.image)
-        self.animation_count = 0
-        self.animation_name = "off"
+    def __init__(self, x, y, width, height, name, loc):
+        super().__init__(x, y, width, height, name)
+        self.loc = load_sprite_sheets("Traps",loc,width,height)
 
     def on(self):
         self.animation_name = "on"
@@ -416,7 +422,7 @@ class Fire (Object):
         self.animation_name = "off"
 
     def loop(self):
-        sprites = self.fire[self.animation_name]
+        sprites = self.loc[self.animation_name]
         sprite_index = (self.animation_count // 
                         self.ANIMATION_DELAY) % len(sprites)
         
@@ -428,6 +434,32 @@ class Fire (Object):
 
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.aniamtion_count = 0 
+
+class Fire(TrapBlock):
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height, name="fire", loc="Fire")
+        self.image = self.loc["off"][0]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.animation_count = 0
+        self.animation_name = "off"
+    def on(self):
+        self.animation_name = "on"
+    def off(self):
+        self.animation_name = "off"
+
+class Fan(TrapBlock):
+    def __init__(self, x, y, width, height):
+        super().__init__(x, y, width, height, name="fan", loc="Fan")
+        self.image = self.loc["Off"][0]
+        self.mask = pygame.mask.from_surface(self.image)
+        self.animation_count = 0
+        self.animation_name = "Off"
+        self.on()
+    def on(self):
+        self.animation_name = "On"
+    def off(self):
+        self.animation_name = "Off"
+
         
 
 class Saw(Object):
@@ -460,12 +492,6 @@ class Saw(Object):
 
         if self.animation_count // self.ANIMATION_DELAY > len(sprites):
             self.aniamtion_count = 0
-
-
-class Menu(Object):
-    def __init__(self, x, y, width, height, name=None):
-        super().__init__(x, y, width, height, name="menu")
-        self.buttons = load_sprite_sheets("Menu","Buttons",width,height)  
 
 
 def menu_button_pressed(menu,no,bgimg = None):
@@ -634,35 +660,43 @@ def handle_move(player,objects):
     keys = pygame.key.get_pressed()
 
     player.x_vel = 0
+    
     collide_left = collide(player, objects, -PLAYER_VEL*2)
     collide_right = collide(player, objects, PLAYER_VEL*2)
-
-    if (keys[pygame.K_LEFT] or keys[pygame.K_a]) and not collide_left:
+    
+    if (keys[pygame.K_LEFT] or keys[pygame.K_a]) and (not collide_left or player.won):
         player.move_left(PLAYER_VEL)
-    if (keys[pygame.K_RIGHT] or keys[pygame.K_d]) and not collide_right:
+    if (keys[pygame.K_RIGHT] or keys[pygame.K_d]) and (not collide_right or player.won):
         player.move_right(PLAYER_VEL)
-
+   
     vertical_collide = handle_vertical_collision(player,objects,player.y_vel)
     to_check = [collide_left, collide_right, *vertical_collide]
     for obj in to_check:
         if obj and obj.name in ("fire","saw"):
             player.make_hit()
+        if obj and obj.name == "end":
+            player.mask= None
+            player.won = True
 
-#global objects
-music = MusicPlayer("assets\\Music")
-music.play()
-sound = SoundPlayer()
-            
+def nextlevel():
+    global level
+    level+=1
+    main(window)
+
+
 
 #Screen Functions
+    
+
+
 def main(window):
     """Opens the game Screen"""
-    global PAUSED, run, music, screen
+    global PAUSED, run, music, screen, sound
     screen = "game"
     
     background, bg_image = get_background("Blue.png")
     bg, bglist = backgroundloader("New BG")
-    
+    won_counter = 0
 
     block_size = 96
     
@@ -672,6 +706,7 @@ def main(window):
     saws = [Saw(200, HEIGHT - block_size -74,38,38),Saw(400, HEIGHT - block_size -74,38,38),Saw(800, HEIGHT - block_size -74,38,38),Saw(1200, HEIGHT - block_size -74,38,38)]
     for saw in saws:
         saw.on()
+    fan = Fan(1300,HEIGHT - block_size - 9, 24, 8)
     negfloor= [Block(i* block_size, HEIGHT - block_size, block_size,3) 
              for i in range(-WIDTH//block_size- 7, -WIDTH*2//block_size,-1)]
     floor = [Block(i* block_size, HEIGHT - block_size, block_size,3) 
@@ -686,9 +721,9 @@ def main(window):
     floor5 = [Block(i* block_size + block_size/2, HEIGHT - block_size, block_size,3) 
              for i in range(WIDTH*4//block_size+ 4, WIDTH*5//block_size)]
     #blocks = [Block(0,HEIGHT - block_size,block_size)]
-
-    objects = [*negfloor, *floor,*floor2,*floor3,*floor4,*floor5, Block(0,HEIGHT - block_size * 2, block_size,2),
-               Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),fire,*saws]
+    Block(0,HEIGHT - block_size * 2, block_size,0)
+    objects = [*negfloor, *floor,*floor2,*floor3,*floor4,*floor5, Block(0,HEIGHT - block_size * 2, block_size,1),
+               Block(block_size * 3,HEIGHT - block_size * 4, block_size,3),Block((WIDTH*5//block_size-1)*block_size,HEIGHT - block_size * 2, block_size,2,"end"),fire,*saws,fan]
     buttonimage = pygame.image.load("assets\\Menu\\Buttons\\menubutton.png").convert_alpha()
     pausebuttonimage = pygame.image.load("assets\Menu\Buttons\Pause.png").convert_alpha()
     pausebutton = Button(20,20,pausebuttonimage,1)
@@ -756,9 +791,17 @@ def main(window):
             fire.loop()
             for saw in saws:
                 saw.loop()
+            fan.loop()
 
             handle_move(player,objects)
             # handle_game_over(player,window)
+            if player.won:
+                won_counter += 1
+                if won_counter > FPS:
+                    sound.achsfx.play()
+                    nextlevel()
+            if player.rect.x +player.rect.width >= fan.rect.x and player.rect.x <= fan.rect.x + fan.rect.width:
+                player.y_vel = -8
             draw(window, bg, bglist,pausebutton, restart, close, player, objects,bars,gameEnd, offset_x)
 
             if ((player.rect.right - offset_x >= WIDTH - scroll_area_width) and player.x_vel > 0) or (
@@ -955,6 +998,11 @@ def settings(window, bgimg = None):
 
 
 if __name__ == "__main__":
+    #global objects
+    music = MusicPlayer("assets\\Music")
+    music.play()
+    sound = SoundPlayer()
+                
     main_menu(window)
 
     
